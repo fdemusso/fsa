@@ -1,0 +1,13 @@
+numpy
+scipy
+kagglehub
+pandas
+joblib
+pyarrow
+fastparquet
+scikit-learn
+ipython
+matplotlib
+seaborn
+statsmodels
+sentence-transformers
