@@ -1,5 +1,5 @@
 """
-bookj_two_utils.py
+book_two_utils.py
 ==================
 EDA utilities for Book 2.
 
@@ -33,8 +33,7 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 # ---------------------------------------------------------------------------
 # Local imports
 # ---------------------------------------------------------------------------
-from src.book_one_utils import load_processed_assets, PROCESSED_DIR
-
+from src.book_one_utils import load_processed_assets, PROCESSED_DIR, save_processed_assets
 
 # ===========================================================================
 # CONFIGURATION
@@ -478,4 +477,46 @@ def fit_tsne_and_plot_manifold(x_svd: np.ndarray, tsne_max_samples: int = 3000) 
 # ===========================================================================
 # PIPELINE ORCHESTRATION
 # ===========================================================================
+
+
+def generate_projection_coordinates() -> None:
+    """
+    Procedura automatizzata: Carica gli asset, calcola le coordinate x,y
+    tramite TruncatedSVD e sovrascrive i file su disco.
+    """
+    # 1. CARICAMENTO ASSET (Usando la tua funzione del Book 01)
+    assets = load_processed_assets()
+    if assets is None:
+        print("Impossibile procedere: Asset non trovati.")
+        return
+
+    movies_df, critic_df, reviews_df, content_matrix = assets
+
+    # 2. ESTRAZIONE MATRICE
+    # Gestiamo la sparsità: se è un DataFrame Pandas con tipi sparsi,
+    # dobbiamo densificare o estrarre i valori per SVD.
+    if hasattr(content_matrix, "sparse"):
+        x_input = content_matrix.sparse.to_dense().values
+    elif hasattr(content_matrix, "values"):
+        x_input = content_matrix.values
+    else:
+        x_input = content_matrix
+
+    # 3. RIDUZIONE DIMENSIONALE (SVD)
+    # Calcoliamo le coordinate x, y nello spazio latente
+    svd = TruncatedSVD(n_components=2, random_state=42)
+    coords = svd.fit_transform(x_input)
+
+    # 4. INIEZIONE COORDINATE
+    movies_df['x'] = coords[:, 0]
+    movies_df['y'] = coords[:, 1]
+
+    # 5. PERSISTENZA (Sovrascrittura asset aggiornati)
+    save_processed_assets(
+        movies_df=movies_df,
+        critic_df=critic_df,
+        reviews_df=reviews_df,
+        content_matrix=content_matrix
+    )
+
 

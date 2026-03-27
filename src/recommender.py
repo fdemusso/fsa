@@ -11,48 +11,59 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.decomposition import TruncatedSVD
 from src.book_one_utils import *
+from src.book_three_utils import *
 
-
-def build_feature_matrix(movies_df, threshold_dir=3, weight_genres=2.0, weight_embeddings=1.5):
-    """
-    Costruisce la matrice finale integrando metadati strutturati e semantica NLP.
-    Risolve i conflitti di nomi duplicati e colonne vuote per il salvataggio Parquet.
-    """
-
-    # 1. Preprocessing & Tokenization (Assicurati che tokenize_column filtri già gli empty string)
+def build_feature_matrix(
+        movies_df: pd.DataFrame,
+        threshold_dir: int = 3,
+        threshold_prod: int = 2,         # Nuova soglia per le case di produzione
+        weight_embeddings: float = 2.0,
+        weight_genres: float = 0.58,
+        weight_directors: float = 0.17,
+        weight_production: float = 0.08  # Il peso della "Vibe" A24/Ghibli/Marvel
+):
+    # 1. Preprocessing & Tokenization
     genres_list = tokenize_column(movies_df, 'genres')
     dirs_list = tokenize_column(movies_df, 'directors')
 
-    # 2. Filtering Registi (Soglia statistica)
+    # NUOVO: Tokenizziamo le case di produzione
+    prod_list = tokenize_column(movies_df, 'production_company')
+
+    # 2. Filtering
     valid_dirs = get_frequent_tokens(dirs_list, threshold_dir)
     dirs_filtered = apply_whitelist(dirs_list, valid_dirs)
 
-    # 3. Vectorization (Generi e Registi - Matrici Sparse)
-    # L'indice DEVE essere lo stesso per tutti per evitare disallineamenti e NaN
+    # NUOVO: Filtriamo le case di produzione troppo piccole/sconosciute
+    valid_prods = get_frequent_tokens(prod_list, threshold_prod)
+    prods_filtered = apply_whitelist(prod_list, valid_prods)
+
+    # 3. Vectorization
     movie_links = movies_df['rotten_tomatoes_link']
     df_genres = vectorize_list_column(genres_list, movie_links)
     df_dirs = vectorize_list_column(dirs_filtered, movie_links)
 
-    # 4. Semantic Embedding (Descrizioni - Matrice Densa)
+    # NUOVO: Vettorializziamo le produzioni
+    df_prods = vectorize_list_column(prods_filtered, movie_links)
+
+    # 4. Semantic Embedding
     df_embeddings = build_embedding_matrix(movies_df, 'movie_info')
-    # Forziamo l'indice per sicurezza millimetrica
     df_embeddings.index = movie_links
 
-    # 5. Weighting & Concatenation
-    weighted_genres = df_genres * weight_genres
+    # 5. Weighting
     weighted_embeddings = df_embeddings * weight_embeddings
+    weighted_genres = df_genres * weight_genres
+    weighted_dirs = df_dirs * weight_directors
 
-    # Unione delle tre componenti
-    matrix = pd.concat([weighted_genres, df_dirs, weighted_embeddings], axis=1)
+    # NUOVO: Scaliamo il peso delle produzioni
+    weighted_prods = df_prods * weight_production
 
-    # --- SANIFICAZIONE POST-CONCAT (Indispensabile per il salvataggio) ---
+    # Unione delle QUATTRO componenti
+    matrix = pd.concat([weighted_genres, weighted_dirs, weighted_prods, weighted_embeddings], axis=1)
 
-    # Rimuoviamo la colonna vuata '' se presente (causa del tuo ValueError)
+    # --- SANIFICAZIONE ---
     if '' in matrix.columns:
         matrix = matrix.drop(columns=[''])
 
-    # Gestione Duplicati: se un regista ha lo stesso nome di un genere,
-    # teniamo solo la prima colonna per evitare conflitti nel formato Parquet.
     if not matrix.columns.is_unique:
         matrix = matrix.loc[:, ~matrix.columns.duplicated()]
 
@@ -69,6 +80,25 @@ def book_one():
         reviews_df=dataframe_rw,
         content_matrix=content_matrix
     )
+
+
+def get_api_recs(target_movie, metadata, matrix, top_k=10):
+    """
+    Versione per API: Restituisce solo i dati in formato JSON serializzabile.
+    """
+    try:
+        # 1. Inferenza pura
+        results = get_recommendations(target_movie, metadata, matrix, top_k=top_k)
+
+        # 2. Selezione campi necessari per il frontend
+        # (Qui non ci serve l'audit dei critici, servono i dati per l'utente)
+        cols = ['movie_title', 'production_company', 'similarity_score', 'final_ranking_score']
+
+        # 3. Conversione in JSON serializzabile (lista di dict)
+        return results[cols].to_dict(orient="records")
+
+    except Exception:
+        return {"error": f"Film '{target_movie}' non trovato o errore interno."}
 
 #def book_two():
 

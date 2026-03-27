@@ -11,3 +11,5 @@ matplotlib
 seaborn
 statsmodels
 sentence-transformers
+ipywidgets
+plotly

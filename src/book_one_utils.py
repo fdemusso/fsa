@@ -309,7 +309,6 @@ def save_processed_assets(
     folder_path    : Destination directory (created if it does not exist).
     """
     os.makedirs(folder_path, exist_ok=True)
-    print(f"Saving assets to '{folder_path}' …")
 
     movies_df.to_parquet(f"{folder_path}/movies_clean.parquet",  index=False)
     critic_df.to_parquet(f"{folder_path}/critic_clean.parquet",  index=False)
@@ -332,14 +331,11 @@ def load_processed_assets(
     (movies_df, critic_df, reviews_df, content_matrix)
         or ``None`` if loading fails.
     """
-    print(f"Loading assets from '{folder_path}' …")
     try:
         movies  = pd.read_parquet(f"{folder_path}/movies_clean.parquet")
         critic  = pd.read_parquet(f"{folder_path}/critic_clean.parquet")
         reviews = pd.read_parquet(f"{folder_path}/reviews_clean.parquet")
         matrix  = pd.read_pickle(f"{folder_path}/content_matrix.pkl")
-
-        print("All assets loaded. System ready.")
         return movies, critic, reviews, matrix
 
     except Exception as exc:
